@@ -40,7 +40,7 @@ For most questions, one fetch of `llms-full.txt` is enough.
 
 ## API-specific questions
 
-For endpoint, parameter, or schema questions, the OpenAPI 3.1 spec is the source of truth: <https://docs.politicalcomms.com/api-reference/openapi.json>. Human-readable reference: <https://docs.politicalcomms.com/api-reference/introduction>. Never state an endpoint or field that is not in the spec.
+For endpoint, parameter, or schema questions, the OpenAPI 3.1 spec is the source of truth: <https://politicalcomms.com/openapi.json> (mirror: <https://docs.politicalcomms.com/api-reference/openapi.json>). Human-readable reference: <https://docs.politicalcomms.com/api-reference/introduction>. Never state an endpoint or field that is not in the spec.
 
 ## Answering rules
 

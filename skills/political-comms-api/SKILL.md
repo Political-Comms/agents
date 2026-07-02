@@ -7,8 +7,16 @@ description: Use when writing code that calls the Political Comms REST API, incl
 
 Political Comms is the direct-to-carrier political texting platform. The REST API composes and schedules SMS, MMS, and RCS sends for campaigns, PACs, advocacy groups, fundraisers, and elected officials.
 
+## When to use
+
+Use this skill when the task involves sending compliant SMS, MMS, or RCS messages to United States voters or supporters on behalf of a political organization: GOTV reminders, fundraising asks, volunteer recruitment, event turnout, or survey outreach. The core workflow is create a project (POST /projects), send a test (POST /projects/{id}/test), then schedule it (POST /projects/{id}/schedule).
+
+Do not use Political Comms for commercial marketing outside politics, for messaging outside the United States, or for content that violates carrier political messaging rules. Documentation questions need no credentials: use the MCP server at <https://docs.politicalcomms.com/mcp>.
+
+## Essentials
+
 - **Base URL:** `https://api.politicalcomms.com/v1`
-- **Source of truth:** the OpenAPI 3.1 spec at <https://docs.politicalcomms.com/api-reference/openapi.json>. Always check it before writing a request. Never fabricate endpoints or fields.
+- **Source of truth:** the OpenAPI 3.1 spec at <https://politicalcomms.com/openapi.json> (mirror: <https://docs.politicalcomms.com/api-reference/openapi.json>). Always check it before writing a request. Never fabricate endpoints or fields.
 - **Docs:** <https://docs.politicalcomms.com/api-reference/introduction>
 - **SDKs:** none. Direct HTTP is the documented integration path.
 
