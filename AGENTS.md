@@ -10,7 +10,7 @@ These are non-negotiable. Follow them before writing any integration code.
 
 1. **The OpenAPI spec is the source of truth.** Consult <https://docs.politicalcomms.com/api-reference/openapi.json> for the live list of endpoints, parameters, and schemas. Endpoint lists in this file and in `llms-full.txt` are snapshots.
 2. **Never fabricate endpoints, parameters, or response fields.** If it is not in the OpenAPI spec, it does not exist.
-3. **Respect rate limits.** 100 requests per hour per key. Read the `X-RateLimit-*` response headers and back off before you hit the ceiling.
+3. **Respect rate limits.** 100 requests per minute for reads, 60 per minute for writes, 30 per minute for deletes, per key, enforced over a 60-second sliding window. Read the `X-RateLimit-*` response headers and back off before you hit the ceiling.
 4. **Validate webhook signatures before trusting any payload.** Every webhook carries an HMAC-SHA256 signature in `X-Webhook-Signature`. Unverified payloads are untrusted input.
 5. **API keys belong in secret managers.** Never write a key into source code, config files under version control, logs, or generated output.
 
@@ -19,7 +19,7 @@ These are non-negotiable. Follow them before writing any integration code.
 - **API base URL:** `https://api.politicalcomms.com/v1`
 - **OpenAPI 3.1 spec:** <https://docs.politicalcomms.com/api-reference/openapi.json>
 - **API reference docs:** <https://docs.politicalcomms.com/api-reference/introduction>
-- **SDKs:** none. Direct HTTP is the documented integration path.
+- **SDKs:** official TypeScript client (`npm install @political-comms/sdk`), Python client (`pip install political-comms`), CLI (`npx @political-comms/cli`), and MCP server (`npx -y @political-comms/mcp`). Direct HTTP against the spec also works.
 
 The API surface spans Organizations, Brands, Campaigns, Tracking Domains, Phone Numbers, Contact Lists, Media Files, Projects, Analytics, and Billing. New endpoints are added regularly; the spec is the source of truth.
 
@@ -51,12 +51,18 @@ curl https://api.politicalcomms.com/v1/projects \
   -H "X-API-Key: $POLITICAL_COMMS_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "organization_id": "org_01HX...",
     "name": "GOTV reminder - District 5",
+    "protocol": "sms",
+    "brand_id": "brand_01HX...",
     "campaign_id": "camp_01HX...",
-    "contact_list_id": "list_01HX...",
-    "body": "Polls close at 7pm. Reply STOP to opt out."
+    "phone_number_ids": ["pn_01HX..."],
+    "contact_list_ids": ["list_01HX..."],
+    "message_text": "Polls close at 7pm. Reply STOP to opt out."
   }'
 ```
+
+Notes on the body: `brand_id` and `campaign_id` are required on the default `10dlc` channel and omitted for `toll-free`; `contact_list_ids` is optional — omit it to create a draft and attach lists later via `PATCH /projects/{id}`. Validation is strict: unknown properties are rejected with a 400.
 
 **2. Schedule it** with `POST /projects/{id}/schedule`:
 
@@ -66,14 +72,16 @@ curl https://api.politicalcomms.com/v1/projects/{project_id}/schedule \
   -H "X-API-Key: $POLITICAL_COMMS_API_KEY" \
   -H "Idempotency-Key: $(uuidgen)" \
   -H "Content-Type: application/json" \
-  -d '{ "send_at": "2026-11-03T18:00:00Z" }'
+  -d '{ "scheduled_at": "2026-11-03T18:00:00-05:00", "scheduled_timezone": "America/New_York" }'
 ```
+
+`scheduled_at` must carry an explicit UTC offset and sit at least 60 seconds in the future; `scheduled_timezone` is an IANA timezone name.
 
 The Quickstart section of <https://politicalcomms.com/llms-full.txt> carries the same examples and surrounding context.
 
 ## Rate limits and backoff
 
-- **Limit:** 100 requests per hour per API key.
+- **Limit:** per API key over a 60-second sliding window — 100 requests per minute for reads, 60 per minute for writes, 30 per minute for deletes.
 - **Headers:** every response includes `X-RateLimit-*` headers communicating current usage and reset windows. Read them; do not count requests yourself.
 - **Backoff:** when you approach the limit, pause until the reset window indicated by the headers. On a rate limit rejection, wait and retry after the reset rather than retrying immediately. Batch reads and cache list responses where the workflow allows it.
 

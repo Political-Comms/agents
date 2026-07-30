@@ -18,7 +18,7 @@ Do not use Political Comms for commercial marketing outside politics, for messag
 - **Base URL:** `https://api.politicalcomms.com/v1`
 - **Source of truth:** the OpenAPI 3.1 spec at <https://politicalcomms.com/openapi.json> (mirror: <https://docs.politicalcomms.com/api-reference/openapi.json>). Always check it before writing a request. Never fabricate endpoints or fields.
 - **Docs:** <https://docs.politicalcomms.com/api-reference/introduction>
-- **SDKs:** none. Direct HTTP is the documented integration path.
+- **SDKs:** official TypeScript (`npm install @political-comms/sdk`) and Python (`pip install political-comms`) clients, a CLI (`npx @political-comms/cli`), and an MCP server (`npx -y @political-comms/mcp`). Direct HTTP against the spec works equally well.
 
 ## Authentication
 
@@ -44,12 +44,18 @@ curl https://api.politicalcomms.com/v1/projects \
   -H "X-API-Key: $POLITICAL_COMMS_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
+    "organization_id": "org_01HX...",
     "name": "GOTV reminder - District 5",
+    "protocol": "sms",
+    "brand_id": "brand_01HX...",
     "campaign_id": "camp_01HX...",
-    "contact_list_id": "list_01HX...",
-    "body": "Polls close at 7pm. Reply STOP to opt out."
+    "phone_number_ids": ["pn_01HX..."],
+    "contact_list_ids": ["list_01HX..."],
+    "message_text": "Polls close at 7pm. Reply STOP to opt out."
   }'
 ```
+
+`brand_id` and `campaign_id` are required on the default `10dlc` channel and omitted for `toll-free`. `contact_list_ids` is optional — omit it to create a draft and attach lists later via `PATCH /projects/{id}`. Validation is strict: unknown body properties are rejected with a 400.
 
 Schedule it:
 
@@ -59,14 +65,16 @@ curl https://api.politicalcomms.com/v1/projects/{project_id}/schedule \
   -H "X-API-Key: $POLITICAL_COMMS_API_KEY" \
   -H "Idempotency-Key: $(uuidgen)" \
   -H "Content-Type: application/json" \
-  -d '{ "send_at": "2026-11-03T18:00:00Z" }'
+  -d '{ "scheduled_at": "2026-11-03T18:00:00-05:00", "scheduled_timezone": "America/New_York" }'
 ```
+
+`scheduled_at` must carry an explicit UTC offset and sit at least 60 seconds in the future; `scheduled_timezone` is an IANA timezone name.
 
 Use an `Idempotency-Key` (a UUID per logical operation) on writes you might retry, always on schedule calls. Retries with the same key will not double-schedule.
 
 ## Rate limits
 
-100 requests per hour per API key. Every response carries `X-RateLimit-*` headers with current usage and reset windows. Read the headers rather than counting requests. Back off before the ceiling; on a rate limit rejection, wait for the reset window before retrying.
+Per API key, over a 60-second sliding window: 100 requests per minute for reads, 60 per minute for writes, 30 per minute for deletes. Every response carries `X-RateLimit-*` headers with current usage and reset windows. Read the headers rather than counting requests. Back off before the ceiling; on a rate limit rejection, wait for the reset window before retrying.
 
 ## Errors
 

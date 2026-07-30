@@ -1,6 +1,14 @@
 # Political Comms Agent Rules
 
+[![skills.sh](https://skills.sh/b/Political-Comms/agents)](https://skills.sh/Political-Comms/agents)
+
 Integration rules and skills for AI coding agents working with [Political Comms](https://politicalcomms.com/), the direct-to-carrier political texting platform.
+
+Install the skills into your agent with:
+
+```bash
+npx skills add Political-Comms/agents
+```
 
 This repository exists so that agents can integrate with Political Comms correctly on the first attempt. It contains the rules, workflows, and skills an agent needs to authenticate, send, and verify against the platform without guessing.
 
@@ -36,7 +44,7 @@ Political Comms operates an MCP server for documentation lookup and feedback. Do
 
 ## SDKs
 
-There are no official SDKs. Direct HTTP is the documented integration path. The OpenAPI spec above generates clients cleanly if one is needed.
+Official SDKs are published for TypeScript (`npm install @political-comms/sdk`), Python (`pip install political-comms`), the command line (`npx @political-comms/cli`), and MCP clients (`npx -y @political-comms/mcp`), all from <https://github.com/Political-Comms/political-comms-sdk>. Direct HTTP works equally well; the OpenAPI spec above generates clients cleanly if you prefer your own.
 
 ## Support
 
