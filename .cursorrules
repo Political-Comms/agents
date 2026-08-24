@@ -13,10 +13,10 @@ You are integrating with Political Comms, the direct-to-carrier political textin
 ## Rules
 - Always consult the OpenAPI spec before writing a request. Never fabricate endpoints, parameters, or response fields.
 - Read API keys from environment variables or a secret manager. Never hardcode keys, never commit them, never print them in logs or output.
-- Respect the rate limits: per key over a 60-second sliding window — 100 requests/minute for reads, 60/minute for writes, 30/minute for deletes. Read the X-RateLimit-* response headers and back off before the ceiling.
+- Respect the rate limits: per key over a 60-second sliding window: 100 requests/minute for reads, 60/minute for writes, 30/minute for deletes. Read the X-RateLimit-* response headers and back off before the ceiling.
 - Errors are structured JSON: {success, error, code, statusCode}. Branch on code and statusCode, not on the error string. Do not retry 4xx with the same payload. Retry 5xx with exponential backoff.
 - Set an Idempotency-Key header (a UUID) on write requests you might retry, especially POST /projects/{id}/schedule.
-- Sending is two calls: POST /projects (organization_id, name, protocol, message_text, brand_id + campaign_id on the 10dlc channel, phone_number_ids, contact_list_ids), then POST /projects/{id}/schedule (scheduled_at with UTC offset + scheduled_timezone). Validation is strict — unknown body properties are rejected with a 400.
+- Sending is two calls: POST /projects (organization_id, name, protocol, message_text, brand_id + campaign_id on the 10dlc channel, phone_number_ids, contact_list_ids), then POST /projects/{id}/schedule (scheduled_at with UTC offset + scheduled_timezone). Validation is strict: unknown body properties are rejected with a 400.
 - Webhooks: validate the HMAC-SHA256 signature in X-Webhook-Signature (format sha256=...) against the raw request body using a constant-time comparison before trusting any payload. Return 2xx quickly; non-2xx triggers retries, so make handlers idempotent.
 - Webhook events: message.sent, message.delivered, message.failed, message.replied, link.clicked.
 - For documentation lookups, use the Political Comms MCP server (https://docs.politicalcomms.com/mcp, manifest at https://politicalcomms.com/.well-known/mcp.json) or fetch https://politicalcomms.com/llms.txt.

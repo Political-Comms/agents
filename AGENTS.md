@@ -62,7 +62,7 @@ curl https://api.politicalcomms.com/v1/projects \
   }'
 ```
 
-Notes on the body: `brand_id` and `campaign_id` are required on the default `10dlc` channel and omitted for `toll-free`; `contact_list_ids` is optional — omit it to create a draft and attach lists later via `PATCH /projects/{id}`. Validation is strict: unknown properties are rejected with a 400.
+Notes on the body: `brand_id` and `campaign_id` are required on the default `10dlc` channel and omitted for `toll-free`; `contact_list_ids` is optional: omit it to create a draft and attach lists later via `PATCH /projects/{id}`. Validation is strict: unknown properties are rejected with a 400.
 
 **2. Schedule it** with `POST /projects/{id}/schedule`:
 
@@ -75,13 +75,13 @@ curl https://api.politicalcomms.com/v1/projects/{project_id}/schedule \
   -d '{ "scheduled_at": "2026-11-03T18:00:00-05:00", "scheduled_timezone": "America/New_York" }'
 ```
 
-`scheduled_at` must carry an explicit UTC offset and sit at least 60 seconds in the future; `scheduled_timezone` is an IANA timezone name.
+`scheduled_at` must carry an explicit UTC offset; it may be now or in the past, in which case sending starts as soon as audience compilation finishes (no minimum lead time). `scheduled_timezone` must be one of the six supported US IANA zones: `America/New_York`, `America/Chicago`, `America/Denver`, `America/Los_Angeles`, `America/Anchorage`, or `Pacific/Honolulu`. `daily_cap_bypass` is optional (default `false`): brands T-Mobile meters (Aegis-vetted, non-political) carry a per-brand daily T-Mobile limit and a project otherwise pauses at it each Pacific day and must be started again to continue; set it to `true` to run the whole project through in one pass, accepting that messages to T-Mobile recipients over the limit may fail and are still billed.
 
 The Quickstart section of <https://politicalcomms.com/llms-full.txt> carries the same examples and surrounding context.
 
 ## Rate limits and backoff
 
-- **Limit:** per API key over a 60-second sliding window — 100 requests per minute for reads, 60 per minute for writes, 30 per minute for deletes.
+- **Limit:** per API key over a 60-second sliding window: 100 requests per minute for reads, 60 per minute for writes, 30 per minute for deletes.
 - **Headers:** every response includes `X-RateLimit-*` headers communicating current usage and reset windows. Read them; do not count requests yourself.
 - **Backoff:** when you approach the limit, pause until the reset window indicated by the headers. On a rate limit rejection, wait and retry after the reset rather than retrying immediately. Batch reads and cache list responses where the workflow allows it.
 
