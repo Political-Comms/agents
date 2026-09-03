@@ -21,7 +21,7 @@ These are non-negotiable. Follow them before writing any integration code.
 - **API reference docs:** <https://docs.politicalcomms.com/api-reference/introduction>
 - **SDKs:** official TypeScript client (`npm install @political-comms/sdk`), Python client (`pip install political-comms`), CLI (`npx @political-comms/cli`), and MCP server (`npx -y @political-comms/mcp`). Direct HTTP against the spec also works.
 
-The API surface spans Organizations, Brands, Campaigns, Tracking Domains, Phone Numbers, Contact Lists, Media Files, Projects, Analytics, and Billing. New endpoints are added regularly; the spec is the source of truth.
+The API surface spans Organizations, Brands, Campaigns, Tracking Domains, Phone Numbers, Contact Lists, Media Files, Projects, Analytics, Billing, and Email (early access). New endpoints are added regularly; the spec is the source of truth.
 
 ## Authentication
 
@@ -79,6 +79,30 @@ curl https://api.politicalcomms.com/v1/projects/{project_id}/schedule \
 
 The Quickstart section of <https://politicalcomms.com/llms-full.txt> carries the same examples and surrounding context.
 
+## Email (early access)
+
+The `/v1/email` surface covers sending domains, sender identities, lists and their contacts, list imports, suppressions, campaigns, and templates: 40 operations in all.
+
+**Every `/v1/email/*` endpoint returns `403 EMAIL_EARLY_ACCESS` until the email product reaches general availability.** Treat that response as expected, not as a bug, a bad key, or a permissions problem: do not retry it, and do not tell the operator their credentials are wrong. The contract is published and stable, so an integration can be written against it now and will work unchanged once the flag is lifted.
+
+Facts that differ from the messaging surface, and that agents get wrong if they assume otherwise:
+
+- **Email lists are keyset paginated.** They return `{ "data": [...], "has_more": bool, "next_cursor": string|null }` inside `data`, unlike the messaging endpoints, which return a plain array. Page until `next_cursor` is null. Cursors are opaque: never parse, construct, or reuse one across a different ordering.
+- **There is no inbox and no inbound email.** We do not receive email, and there is no inbound email webhook. Replies go to the `reply_to` address on the sender identity. Do not build a polling loop looking for one.
+- **There is no A/B testing** and no `email.opened` webhook event.
+- **DNS is manual.** `POST /v1/email/domains` returns the records to publish; the platform never writes DNS and never asks for registrar credentials. Poll the domain until `status` is `active`.
+- **Removing list contacts unsubscribes them, it does not delete them.** The rows carry the bounce and complaint history that stops a later re-import from resurrecting a suppressed address.
+- **Check before scheduling.** `GET /v1/email/campaigns/{id}` returns a `blocked` array naming exactly what is stopping a schedule. Read it rather than calling schedule and interpreting the failure.
+- **Do not retry a refused resume.** A campaign a deliverability breaker auto-paused twice returns `409 EMAIL_CAMPAIGN_RESUME_REQUIRES_SUPPORT`. There is no override on this surface; escalate to a human.
+- **Test sends are real sends.** They are billed per recipient. They are excluded from campaign stats and never fire webhooks.
+- **Lincoln drafts email templates, asynchronously and for money.** `POST /v1/email/templates/drafts` answers `202` with a draft id and the `unit_price` ($3.00 by default); poll `GET /v1/email/templates/drafts/{id}` until `status` is `ready` or `failed`, usually under two minutes. Do not treat the `202` as a finished draft, and do not busy-poll faster than about once every two seconds. The charge lands only when a draft becomes `ready`: a `failed` draft, whatever its `error_code` (`EMAIL_DRAFT_INVALID`, `EMAIL_DRAFT_MODEL_ERROR`, `INSUFFICIENT_BALANCE`), is never billed. Ask for a fresh draft rather than retrying a failed one. A wallet that cannot cover it returns `402 INSUFFICIENT_BALANCE` up front and creates no draft.
+- **Images in a draft must already be email assets.** `image_media_ids` (at most six) must name media in the same organization with `usage` `email_asset`. Upload one with `POST /v1/media` and `usage: "email_asset"`, which is also the flag that puts an image in the email library rather than the texting one. `brand_id` is not accepted with an email asset, because email assets are organization-scoped.
+- **Importing a list is one call over a URL you host.** `POST /v1/email/lists/import` fetches an HTTPS CSV (50 MB cap, SSRF-guarded), stages it, and commits, answering `202`; poll `GET /v1/email/lists/imports/{id}`. `mapping` is optional and common ESP exports are recognized; when no email column is found the call returns `400 VALIDATION_ERROR` with `details.headers` listing what was read, so send a mapping naming the right column rather than retrying the same body.
+- **A validation export is polled, and `409` is the signal.** `POST /v1/email/lists/{id}/export` answers `202` with a `file_id`; `GET /v1/email/lists/{id}/export/{fileId}/download` answers `409 EXPORT_NOT_READY` until the worker has built the file, so treat that as "poll again" rather than an error, and do not re-queue. Send `{"state": "undeliverable"}` to narrow the CSV to one verdict class. Blank verdict columns mean the address has no cached verdict (never validated, or the 90-day cache expired), which is not the same as `false`.
+- **Read `lint` on every template write.** `POST` and `PATCH` on `/v1/email/templates` return a `lint` object beside the template. A template with lint errors saves, but a campaign built on it will not schedule, so a caller that ignores `lint` discovers the problem at schedule time instead.
+
+Five email webhook events subscribe alongside the message events: `email.delivered`, `email.bounced` (permanent bounces only), `email.complained`, `email.unsubscribed`, and `email.clicked` (unique, non-bot clicks). Each payload carries a stable `id` that is also the deduplication key.
+
 ## Rate limits and backoff
 
 - **Limit:** per API key over a 60-second sliding window: 100 requests per minute for reads, 60 per minute for writes, 30 per minute for deletes.
@@ -118,6 +142,14 @@ Subscribe an HTTPS endpoint and the platform pushes events:
 - `message.failed`
 - `message.replied`
 - `link.clicked`
+
+Email events (early access), which fire only once the email product is generally available:
+
+- `email.delivered`
+- `email.bounced` (permanent bounces only; soft bounces are deferred and never fire)
+- `email.complained`
+- `email.unsubscribed`
+- `email.clicked` (unique, non-bot clicks)
 
 **Signature verification is mandatory.** Each delivery carries an HMAC-SHA256 signature in the `X-Webhook-Signature` header, formatted `sha256=...`. Compute the HMAC-SHA256 of the raw request body with your webhook secret, compare against the header using a constant-time comparison, and reject anything that does not match before touching the payload.
 
