@@ -106,21 +106,17 @@ What differs from the messaging surface:
 - **No inbox, no inbound email, no `email.opened`, no A/B testing.** Replies go to the sender identity's `reply_to` address.
 - **DNS is manual.** `POST /v1/email/domains` returns the records to publish; poll until `status` is `active`.
 - **Sender identities carry a read-only `gmail_verified_sender` object.** `{ status, submitted_at, verified_at }`, `status` one of `not_eligible | eligible | ready_to_submit | submitted | verified | suspended | rejected | expired`, standing in Google's Gmail Verified Sender Program via Campaign Verify. Never a sending gate.
-- **Removing contacts unsubscribes them.** Rows are kept so a later re-import cannot resurrect a suppressed address.
+- **Use suppressions to stop mailing someone.** `POST /v1/email/suppressions` survives a re-import; there is no public contact-delete.
 - **Read `blocked` before scheduling.** `GET /v1/email/campaigns/{id}` names exactly what is stopping the schedule.
-- **Never retry `409 EMAIL_CAMPAIGN_RESUME_REQUIRES_SUPPORT`.** A campaign auto-paused twice by a deliverability breaker needs a human.
-- **Test sends are real and billed.** They are excluded from stats and never fire webhooks.
-- **Lincoln drafting is async and paid.** `POST /v1/email/templates/drafts` returns `202` with a draft id and `unit_price` ($3.00 by default). Poll `GET /v1/email/templates/drafts/{id}` until `status` is `ready` or `failed`, usually under two minutes. Only a `ready` draft is charged; a `failed` one never is, whatever its `error_code`. Request a new draft rather than retrying a failed one.
-- **Draft images must be email assets.** At most six `image_media_ids`, each organization-owned media with `usage` `email_asset`. `POST /v1/media` takes `usage` `mms` or `email_asset`; `brand_id` is not accepted with `email_asset`.
-- **List import is one call.** `POST /v1/email/lists/import` fetches an HTTPS CSV you host, stages it, and commits, returning `202`. Poll `GET /v1/email/lists/imports/{id}`. `mapping` is optional; a `400 VALIDATION_ERROR` carries `details.headers`, so send a mapping naming the email column instead of retrying the same body.
+- **List import is one call.** `POST /v1/email/lists/import` fetches an HTTPS CSV you host, stages it, and commits, returning `202`; progress shows on the list in the dashboard. `mapping` is optional; a `400 VALIDATION_ERROR` carries `details.headers`, so send a mapping naming the email column instead of retrying the same body.
 - **Read `lint` on template writes.** A template with lint errors saves but will not let a campaign schedule.
+- **Setup and paid workflows are dashboard-only.** Registering domains and senders, list curation, validation, result exports, campaign pause/resume/test, and AI drafting are not in the API.
 
 ```bash
-# Registering a sending domain returns the DNS records to publish yourself.
+# Read a sending domain and the DNS records to publish yourself.
+# Domains are registered in the dashboard; the API is read-only here.
 curl https://api.politicalcomms.com/v1/email/domains \
-  -H "X-API-Key: $POLITICAL_COMMS_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{ "domain": "mail.example.org" }'
+  -H "X-API-Key: $POLITICAL_COMMS_API_KEY"
 ```
 
 ## Webhooks
