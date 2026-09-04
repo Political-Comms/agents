@@ -105,6 +105,7 @@ What differs from the messaging surface:
 - **Keyset pagination.** Email lists return `{ "data": [...], "has_more": bool, "next_cursor": string|null }` inside `data`, not a plain array. Page until `next_cursor` is null; cursors are opaque.
 - **No inbox, no inbound email, no `email.opened`, no A/B testing.** Replies go to the sender identity's `reply_to` address.
 - **DNS is manual.** `POST /v1/email/domains` returns the records to publish; poll until `status` is `active`.
+- **Sender identities carry a read-only `gmail_verified_sender` object.** `{ status, submitted_at, verified_at }`, `status` one of `not_eligible | eligible | ready_to_submit | submitted | verified | suspended | rejected | expired`, standing in Google's Gmail Verified Sender Program via Campaign Verify. Never a sending gate.
 - **Removing contacts unsubscribes them.** Rows are kept so a later re-import cannot resurrect a suppressed address.
 - **Read `blocked` before scheduling.** `GET /v1/email/campaigns/{id}` names exactly what is stopping the schedule.
 - **Never retry `409 EMAIL_CAMPAIGN_RESUME_REQUIRES_SUPPORT`.** A campaign auto-paused twice by a deliverability breaker needs a human.
