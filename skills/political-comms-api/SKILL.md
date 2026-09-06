@@ -106,9 +106,9 @@ What differs from the messaging surface:
 - **No inbox, no inbound email, no `email.opened`, no A/B testing.** Replies go to the sender identity's `reply_to` address.
 - **DNS is manual.** `POST /v1/email/domains` returns the records to publish; poll until `status` is `active`.
 - **Sender identities carry a read-only `gmail_verified_sender` object.** `{ status, submitted_at, verified_at }`, `status` one of `not_eligible | eligible | ready_to_submit | submitted | verified | suspended | rejected | expired`, standing in Google's Gmail Verified Sender Program via Campaign Verify. Never a sending gate.
-- **Use suppressions to stop mailing someone.** `POST /v1/email/suppressions` survives a re-import; there is no public contact-delete.
+- **Use suppressions to stop mailing someone.** `POST /v1/email/suppressions` survives a re-import; there is no public contact-delete. Scope is `org`, `identity`, or `domain` and always applies. To hold people out of ONE campaign, put an ordinary email list in its `suppression_list_ids`.
 - **Read `blocked` before scheduling.** `GET /v1/email/campaigns/{id}` names exactly what is stopping the schedule.
-- **List import is one call.** `POST /v1/email/lists/import` fetches an HTTPS CSV you host, stages it, and commits, returning `202`; progress shows on the list in the dashboard. `mapping` is optional; a `400 VALIDATION_ERROR` carries `details.headers`, so send a mapping naming the email column instead of retrying the same body.
+- **List import is one call, and the file IS the list.** `POST /v1/email/lists/import` fetches an HTTPS CSV you host, stages it, and commits it as a NEW list, returning `202`; progress shows on the list in the dashboard. There is no `email_list_id`: `name` defaults to the file name and `email_domain_id` scopes the list to one sending domain. `mapping` is optional; a `400 VALIDATION_ERROR` carries `details.headers`, so send a mapping naming the email column instead of retrying the same body.
 - **Read `lint` on template writes.** A template with lint errors saves but will not let a campaign schedule.
 - **Setup and paid workflows are dashboard-only.** Registering domains and senders, list curation, validation, result exports, campaign pause/resume/test, and AI drafting are not in the API.
 
