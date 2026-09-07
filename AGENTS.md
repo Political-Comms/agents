@@ -34,7 +34,7 @@ X-API-Key: pc_live_1234567890abcdef
 Key facts:
 
 - Keys are prefixed `pc_live_`.
-- Key provisioning is human-initiated. A person generates keys in the dashboard at <https://app.politicalcomms.com/> under Admin, then API Keys. An agent cannot self-provision a key; ask the operator to create one.
+- Key provisioning is human-initiated. A person generates keys in the dashboard at <https://app.politicalcomms.com/> under Admin → API. An agent cannot self-provision a key; ask the operator to create one.
 - Keys are shown once at creation. Store them in a secret manager immediately.
 - Read the key from an environment variable or secret manager at runtime. Never hardcode it.
 
