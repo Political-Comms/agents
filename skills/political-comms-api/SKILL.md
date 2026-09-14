@@ -60,6 +60,8 @@ curl https://api.politicalcomms.com/v1/projects \
 
 This call, `POST /projects/{id}/copy`, and `POST /v1/email/campaigns` return `403 ONBOARDING_INCOMPLETE` once an organization's 14-day account setup grace window has passed with its business profile or funding step still incomplete (`details.missingSteps` names what's outstanding, `details.onboardingUrl` is `/onboarding`). Existing sends, schedules, and conversations are unaffected. Do not retry; escalate to a human operator, who completes setup in the dashboard.
 
+`POST /projects` also returns `409 SENDING_PAUSED` if Political Comms has paused sending for the organization or platform-wide (`details.scope` is `organization` or `platform`). Do not retry; escalate to a human operator.
+
 Schedule it:
 
 ```bash
@@ -72,6 +74,8 @@ curl https://api.politicalcomms.com/v1/projects/{project_id}/schedule \
 ```
 
 `scheduled_at` must carry an explicit UTC offset; it may be now or in the past, in which case sending starts as soon as audience compilation finishes (no minimum lead time). `scheduled_timezone` must be one of the six supported US IANA zones: `America/New_York`, `America/Chicago`, `America/Denver`, `America/Los_Angeles`, `America/Anchorage`, or `Pacific/Honolulu`. `daily_cap_bypass` is optional (default `false`): brands T-Mobile meters (Aegis-vetted, non-political) carry a per-brand daily T-Mobile limit and a project otherwise pauses at it each Pacific day and must be started again to continue; set it to `true` to run the whole project through in one pass, accepting that messages to T-Mobile recipients over the limit may fail and are still billed.
+
+This call also returns `409 SENDING_PAUSED` if Political Comms has paused sending for the organization or platform-wide (`details.scope` is `organization` or `platform`). Do not retry; escalate to a human operator.
 
 Use an `Idempotency-Key` (a UUID per logical operation) on writes you might retry, always on schedule calls. Retries with the same key will not double-schedule.
 
@@ -113,7 +117,7 @@ Facts agents get wrong if they assume otherwise:
 
 - The body is `{ "text": "..." }` and nothing else (SMS only, up to 1,600 characters; unknown properties are a `400`). The number is a property of the conversation, never of the request. The API never starts a conversation; a project send does.
 - `202` means queued, not delivered. The outcome arrives on `message.sent`, `message.delivered`, or `message.failed` for the returned `message_id`; there is no separate reply event.
-- Every refusal happens before any charge: `409 CONTACT_OPTED_OUT` (the contact replied STOP; do not retry), `409 CONVERSATION_NOT_SENDABLE`, `409 PROJECT_DELETED`, `409 PHONE_NUMBER_UNAVAILABLE`, `402 INSUFFICIENT_BALANCE`. A thread outside the key's organizations is `404 CONVERSATION_NOT_FOUND`, never `403`.
+- Every refusal happens before any charge: `409 CONTACT_OPTED_OUT` (the contact replied STOP; do not retry), `409 CONVERSATION_NOT_SENDABLE`, `409 PROJECT_DELETED`, `409 PHONE_NUMBER_UNAVAILABLE`, `409 SENDING_PAUSED` (sending paused for the organization or platform-wide; `details.scope` names which), `402 INSUFFICIENT_BALANCE`. A thread outside the key's organizations is `404 CONVERSATION_NOT_FOUND`, never `403`.
 - `503 SEND_ENQUEUE_FAILED` means nothing was sent and nothing was charged: retry the same call. On any other `5xx`, read `GET /conversations/{conversation_id}/messages` and look for your text before retrying.
 - Missed a webhook? `GET /conversations?updated_since=<iso>` lists threads with inbound messages, newest inbound first (default 7 days back, maximum 90; keyset paginated, page until `next_cursor` is null). Poll it at most once a minute; the webhook is the real-time path. `GET /conversations/{id}/messages` reads a thread newest first without marking it read.
 
@@ -122,6 +126,8 @@ Facts agents get wrong if they assume otherwise:
 The `/v1/email` surface covers sending domains, sender identities, lists and contacts, list imports, suppressions, campaigns, and templates.
 
 **Every `/v1/email/*` endpoint returns `403 EMAIL_EARLY_ACCESS` until the email product reaches general availability.** That response is expected, not a bad key or a permissions problem. Do not retry it and do not report a credential failure. The contract is stable, so code written against it now keeps working once the flag is lifted.
+
+**Once GA, every write under `/v1/email/*` also requires the `email` entitlement.** Without it, the write returns `403 ENTITLEMENT_REQUIRED` with `details.entitlement: "email"`; `POST /v1/email/campaigns/{id}/schedule` additionally returns `409 SENDING_PAUSED` when sending is paused. Do not retry either; escalate to a human operator.
 
 What differs from the messaging surface:
 

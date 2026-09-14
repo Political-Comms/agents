@@ -81,6 +81,10 @@ The Quickstart section of <https://politicalcomms.com/llms-full.txt> carries the
 
 **Account setup can block creates.** `POST /projects`, `POST /projects/{id}/copy`, and `POST /v1/email/campaigns` (and their dashboard equivalents: new brands, campaigns, toll-free verifications, phone number purchases, email domains and senders) return `403 ONBOARDING_INCOMPLETE` once an organization's 14-day account setup grace window has passed with its business profile or funding step still incomplete. `details.missingSteps` names what's outstanding (`profile`, `funding`, or both) and `details.onboardingUrl` is `/onboarding`. This never affects anything already running: existing sends, schedules, and conversations are unaffected. Escalate to a human operator; an agent cannot complete account setup on the organization's behalf.
 
+**Some features require enablement by Political Comms.** Every write (`POST`/`PUT`/`PATCH`/`DELETE`) under `/v1/email/*` returns `403 ENTITLEMENT_REQUIRED` if the organization is not entitled to that feature. `details.entitlement` names the missing key (`tendlc`, `toll_free`, `short_code`, `data_purchases`, `email`, `stripe_connect`, `phone_number_sharing`, or `sub_orgs`). Escalate to a human operator to contact support; an agent cannot self-enable an entitlement.
+
+**Sending can be paused.** `POST /projects`, `POST /projects/{id}/schedule`, `POST /v1/conversations/{id}/messages`, and `POST /v1/email/campaigns/{id}/schedule` return `409 SENDING_PAUSED` if Political Comms has paused sending for the organization or platform-wide. `details.scope` is `organization` or `platform`. Do not retry; escalate to a human operator.
+
 ## Replying to inbound texts
 
 Every inbound text arrives on the `message.replied` webhook with `conversation_id`, `message_id`, `from`, `to`, and `text`. Answer it inside the same conversation, from the same number, with `POST /conversations/{conversation_id}/messages`:
@@ -98,7 +102,7 @@ Facts agents get wrong if they assume otherwise:
 
 - The body is `{ "text": "..." }` and nothing else (SMS only, up to 1,600 characters; unknown properties are a `400`). The number is a property of the conversation, never of the request. The API never starts a conversation; a project send does.
 - `202` means queued, not delivered. The outcome arrives on `message.sent`, `message.delivered`, or `message.failed` for the returned `message_id`; there is no separate reply event.
-- Every refusal happens before any charge: `409 CONTACT_OPTED_OUT` (the contact replied STOP; do not retry), `409 CONVERSATION_NOT_SENDABLE`, `409 PROJECT_DELETED`, `409 PHONE_NUMBER_UNAVAILABLE`, `402 INSUFFICIENT_BALANCE`. A thread outside the key's organizations is `404 CONVERSATION_NOT_FOUND`, never `403`.
+- Every refusal happens before any charge: `409 CONTACT_OPTED_OUT` (the contact replied STOP; do not retry), `409 CONVERSATION_NOT_SENDABLE`, `409 PROJECT_DELETED`, `409 PHONE_NUMBER_UNAVAILABLE`, `409 SENDING_PAUSED` (sending paused for the organization or platform-wide; `details.scope` names which), `402 INSUFFICIENT_BALANCE`. A thread outside the key's organizations is `404 CONVERSATION_NOT_FOUND`, never `403`.
 - `503 SEND_ENQUEUE_FAILED` means nothing was sent and nothing was charged: retry the same call. On any other `5xx`, read `GET /conversations/{conversation_id}/messages` and look for your text before retrying.
 - Missed a webhook? `GET /conversations?updated_since=<iso>` lists threads with inbound messages, newest inbound first (default 7 days back, maximum 90; keyset paginated, page until `next_cursor` is null). Poll it at most once a minute; the webhook is the real-time path. `GET /conversations/{id}/messages` reads a thread newest first without marking it read.
 
@@ -107,6 +111,8 @@ Facts agents get wrong if they assume otherwise:
 The `/v1/email` surface covers sending domains and sender identities (read-only), lists and their contacts, list imports, suppressions, campaigns, and templates: 22 operations in all. Setup, curation, and paid workflows are dashboard features rather than API endpoints: registering domains and senders, renaming or deleting lists, paid validation, result exports, campaign pause/resume/test, and Lincoln drafting.
 
 **Every `/v1/email/*` endpoint returns `403 EMAIL_EARLY_ACCESS` until the email product reaches general availability.** Treat that response as expected, not as a bug, a bad key, or a permissions problem: do not retry it, and do not tell the operator their credentials are wrong. The contract is published and stable, so an integration can be written against it now and will work unchanged once the flag is lifted.
+
+**Once GA, every write under `/v1/email/*` also requires the `email` entitlement.** Without it, the write returns `403 ENTITLEMENT_REQUIRED` with `details.entitlement: "email"`; `POST /v1/email/campaigns/{id}/schedule` additionally returns `409 SENDING_PAUSED` when sending is paused. Escalate either to a human operator rather than retrying.
 
 Facts that differ from the messaging surface, and that agents get wrong if they assume otherwise:
 
