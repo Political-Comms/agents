@@ -42,7 +42,7 @@ The full agent-oriented auth walkthrough lives at <https://politicalcomms.com/au
 
 ## Core workflow: create, then schedule
 
-A "project" is the unit of work: a composed message body, optional media, link tracking, and the contact list it targets. Sending is two calls.
+A "project" is the unit of work: a composed message body, optional media, link tracking, and the contact list it targets. Sending is two calls, with an optional test in between: `POST /projects/{id}/test` accepts `test_contacts`, and each entry may carry an optional `merge_values` object (tag name to value) so it renders without sampling a list contact.
 
 **1. Create the project** with `POST /projects`:
 

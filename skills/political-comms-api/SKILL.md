@@ -9,7 +9,7 @@ Political Comms is the direct-to-carrier political texting platform. The REST AP
 
 ## When to use
 
-Use this skill when the task involves sending compliant SMS, MMS, or RCS messages to United States voters or supporters on behalf of a political organization: GOTV reminders, fundraising asks, volunteer recruitment, event turnout, or survey outreach. The core workflow is create a project (POST /projects), send a test (POST /projects/{id}/test), then schedule it (POST /projects/{id}/schedule).
+Use this skill when the task involves sending compliant SMS, MMS, or RCS messages to United States voters or supporters on behalf of a political organization: GOTV reminders, fundraising asks, volunteer recruitment, event turnout, or survey outreach. The core workflow is create a project (POST /projects), send a test (POST /projects/{id}/test; each `test_contacts` entry may carry an optional `merge_values` object, tag name to value, so it renders without sampling a list contact), then schedule it (POST /projects/{id}/schedule).
 
 Do not use Political Comms for commercial marketing outside politics, for messaging outside the United States, or for content that violates carrier political messaging rules. Documentation questions need no credentials: use the MCP server at <https://docs.politicalcomms.com/mcp>.
 
