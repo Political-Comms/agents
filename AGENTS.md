@@ -21,7 +21,7 @@ These are non-negotiable. Follow them before writing any integration code.
 - **API reference docs:** <https://docs.politicalcomms.com/api-reference/introduction>
 - **SDKs:** official TypeScript client (`npm install @political-comms/sdk`), Python client (`pip install political-comms`), CLI (`npx @political-comms/cli`), and MCP server (`npx -y @political-comms/mcp`). Direct HTTP against the spec also works.
 
-The API surface spans Organizations, Brands, Campaigns, Tracking Domains, Phone Numbers, Contact Lists, Media Files, Projects, Conversations, Analytics, Billing, and Email (early access). `GET /phone-numbers` includes numbers a parent organization shared with the key's organizations (`shared: true`, `nickname`; the owner's names are null on those rows). New endpoints are added regularly; the spec is the source of truth.
+The API surface spans Organizations, Brands, Campaigns, Tracking Domains, Phone Numbers, Contact Lists, Media Files, Projects, Conversations, Analytics, Billing, and Email (early access). `GET /phone-numbers` includes numbers a parent organization shared with the key's organizations (`shared: true`, `nickname`; the owner's names are null on those rows). Brand, campaign and owned tracking-domain rows carry a `notes` field: the account's internal note (up to 100 characters) or null; it is never shown to recipients. New endpoints are added regularly; the spec is the source of truth.
 
 ## Authentication
 
