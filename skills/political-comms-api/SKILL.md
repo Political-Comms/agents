@@ -81,7 +81,7 @@ Use an `Idempotency-Key` (a UUID per logical operation) on writes you might retr
 
 ## Rate limits
 
-Per API key, over a 60-second sliding window: 600 requests per minute, the same for every scope. Every response carries `X-RateLimit-*` headers with current usage and reset windows. Read the headers rather than counting requests. Back off before the ceiling; on a rate limit rejection, wait for the reset window before retrying.
+600 requests per minute per API key, the same for every scope: bursts of up to 600 at once, refilling at 10 per second. Every response carries `X-RateLimit-*` headers with current usage and reset windows. Read the headers rather than counting requests. Back off before the ceiling; on a rate limit rejection, wait for the reset window before retrying.
 
 ## Errors
 
