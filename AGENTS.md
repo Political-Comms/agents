@@ -10,7 +10,7 @@ These are non-negotiable. Follow them before writing any integration code.
 
 1. **The OpenAPI spec is the source of truth.** Consult <https://docs.politicalcomms.com/api-reference/openapi.json> for the live list of endpoints, parameters, and schemas. Endpoint lists in this file and in `llms-full.txt` are snapshots.
 2. **Never fabricate endpoints, parameters, or response fields.** If it is not in the OpenAPI spec, it does not exist.
-3. **Respect rate limits.** 100 requests per minute for reads, 60 per minute for writes, 30 per minute for deletes, per key, enforced over a 60-second sliding window. Read the `X-RateLimit-*` response headers and back off before you hit the ceiling.
+3. **Respect rate limits.** 600 requests per minute per key, the same for every scope, enforced over a 60-second sliding window. Read the `X-RateLimit-*` response headers and back off before you hit the ceiling.
 4. **Validate webhook signatures before trusting any payload.** Every webhook carries an HMAC-SHA256 signature in `X-Webhook-Signature`. Unverified payloads are untrusted input.
 5. **API keys belong in secret managers.** Never write a key into source code, config files under version control, logs, or generated output.
 
@@ -131,7 +131,7 @@ Five email webhook events subscribe alongside the message events: `email.deliver
 
 ## Rate limits and backoff
 
-- **Limit:** per API key over a 60-second sliding window: 100 requests per minute for reads, 60 per minute for writes, 30 per minute for deletes.
+- **Limit:** 600 requests per minute per API key over a 60-second sliding window, the same for every scope.
 - **Headers:** every response includes `X-RateLimit-*` headers communicating current usage and reset windows. Read them; do not count requests yourself.
 - **Backoff:** when you approach the limit, pause until the reset window indicated by the headers. On a rate limit rejection, wait and retry after the reset rather than retrying immediately. Batch reads and cache list responses where the workflow allows it.
 
