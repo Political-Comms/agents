@@ -23,6 +23,125 @@ These are non-negotiable. Follow them before writing any integration code.
 
 The API surface spans Organizations, Brands, Campaigns, Tracking Domains, Phone Numbers, Contact Lists, Media Files, Projects, Conversations, Analytics, Billing, and Email. `GET /phone-numbers` includes numbers a parent organization shared with the key's organizations (`shared: true`, `nickname`; the owner's names are null on those rows). Brand, campaign and owned tracking-domain rows carry a `notes` field: the account's internal note (up to 100 characters) or null; it is never shown to recipients. New endpoints are added regularly; the spec is the source of truth.
 
+## Operation snapshot (OpenAPI 1.4.1, 2026-10-31)
+
+Every /v1 operation at the snapshot date; the spec is the live list.
+
+### Projects
+
+- GET /v1/projects: List Projects
+- POST /v1/projects: Create Project
+- GET /v1/projects/stats: Get Project Stats (all)
+- GET /v1/projects/{id}: Get Project
+- PATCH /v1/projects/{id}: Update Project
+- POST /v1/projects/{id}/copy: Copy Project
+- POST /v1/projects/{id}/pause: Pause Project
+- POST /v1/projects/{id}/schedule: Schedule Project
+- GET /v1/projects/{id}/stats: Get Project Stats (single)
+- GET /v1/projects/{id}/survey-results: Get Survey Results
+- POST /v1/projects/{id}/test: Test Project
+- GET /v1/projects/{id}/throughput: Get Project Throughput
+- POST /v1/projects/{id}/unschedule: Unschedule Project
+
+### Conversations
+
+- GET /v1/conversations: List Conversations
+- GET /v1/conversations/{conversation_id}: Get Conversation
+- GET /v1/conversations/{conversation_id}/messages: List Conversation Messages
+- POST /v1/conversations/{conversation_id}/messages: Reply to Conversation
+
+### Phone Numbers
+
+- GET /v1/phone-numbers: List Phone Numbers
+
+### Toll-Free Verifications
+
+- GET /v1/toll-free-verifications: List Toll-Free Verifications
+- GET /v1/toll-free-verifications/{id}: Get Toll-Free Verification
+
+### Brands
+
+- GET /v1/brands: List Brands
+
+### 10DLC Campaigns
+
+- GET /v1/campaigns: List Campaigns
+- GET /v1/campaigns/{id}/throughput: Get Campaign Throughput
+
+### Email Campaigns
+
+- GET /v1/email/campaigns: List Campaigns
+- POST /v1/email/campaigns: Create Campaign
+- GET /v1/email/campaigns/{id}: Get Campaign
+- POST /v1/email/campaigns/{id}/schedule: Schedule Campaign
+- GET /v1/email/campaigns/{id}/stats: Get Campaign Stats
+- POST /v1/email/campaigns/{id}/unschedule: Unschedule Campaign
+
+### Email Templates
+
+- GET /v1/email/templates: List Email Templates
+- POST /v1/email/templates: Create Email Template
+- GET /v1/email/templates/{id}: Get Email Template
+
+### Email Senders
+
+- GET /v1/email/senders: List Sender Identities
+- GET /v1/email/senders/{id}: Get Sender Identity
+
+### Email Suppressions
+
+- GET /v1/email/suppressions: List Suppressions
+- POST /v1/email/suppressions: Add Suppressions
+- DELETE /v1/email/suppressions: Remove Suppressions
+
+### Contact Lists
+
+- GET /v1/contact-lists: List Contact Lists
+- POST /v1/contact-lists/import: Import Contact List
+- GET /v1/contact-lists/{id}: Get Contact List
+- DELETE /v1/contact-lists/{id}: Delete Contact List
+- POST /v1/contact-lists/{id}/analyze: Analyze Contact List
+- GET /v1/contact-lists/{id}/download: Download Contact List CSV
+
+### Email Lists
+
+- GET /v1/email/lists: List Email Lists
+- POST /v1/email/lists: Create Email List
+- POST /v1/email/lists/import: Import Contacts From A URL
+- GET /v1/email/lists/{id}: Get Email List
+- GET /v1/email/lists/{id}/contacts: List Contacts
+- POST /v1/email/lists/{id}/contacts: Add Contacts
+
+### Media Files
+
+- GET /v1/media: List Media Files
+- POST /v1/media: Import Media
+- GET /v1/media/{id}: Get Media File
+- DELETE /v1/media/{id}: Delete Media File
+
+### Sending Domains
+
+- GET /v1/email/domains: List Sending Domains
+- GET /v1/email/domains/{id}: Get Sending Domain
+
+### Tracking Domains
+
+- GET /v1/tracking-domains: List Tracking Domains
+
+### Organizations
+
+- GET /v1/hierarchy: Get Hierarchy
+- GET /v1/organizations: List Organizations
+
+### Billing
+
+- GET /v1/ledger/usage: Get Usage
+- GET /v1/ledger/usage/by-initiator: Get Usage by Initiator
+
+### Analytics
+
+- GET /v1/messages/stats: Get Message Stats
+
 ## Authentication
 
 Every request carries an API key in the `X-API-Key` header:
@@ -106,7 +225,7 @@ curl https://api.politicalcomms.com/v1/conversations/{conversation_id}/messages 
 
 Facts agents get wrong if they assume otherwise:
 
-- The body is `{ "text": "...", "media_ids": ["<media id>"] }` and nothing else (`text` up to 1,600 characters; at most one `media_ids` entry, an id from `GET /media`; at least one of non-blank `text` or a media id is required; unknown properties and raw `media_urls` are a `400`). Without media the reply is SMS billed per segment; with media it is one MMS billed flat. The `202` data adds `media_urls`. The number is a property of the conversation, never of the request. The API never starts a conversation; a project send does.
+- The body is `{ "text": "...", "media_ids": ["<media id>"] }` and nothing else (`text` up to 10 SMS parts, 1,530 GSM-7 or 670 Unicode characters, or 1,500 characters with media; at most one `media_ids` entry, an id from `GET /media`; at least one of non-blank `text` or a media id is required; unknown properties and raw `media_urls` are a `400`). Without media the reply is SMS billed per segment; with media it is one MMS billed flat. The `202` data adds `media_urls`. The number is a property of the conversation, never of the request. The API never starts a conversation; a project send does.
 - `202` means queued, not delivered. The outcome arrives on `message.sent`, `message.delivered`, or `message.failed` for the returned `message_id`; there is no separate reply event.
 - Every refusal happens before any charge: `409 CONTACT_OPTED_OUT` (the contact replied STOP; do not retry), `409 CONVERSATION_NOT_SENDABLE`, `409 PROJECT_DELETED`, `409 PHONE_NUMBER_UNAVAILABLE`, `400 MEDIA_NOT_USABLE` (media not in the conversation's organization, not ready, or from a different brand than the project's), `409 SENDING_PAUSED` (sending paused for the organization or platform-wide; `details.scope` names which), `402 INSUFFICIENT_BALANCE`. A thread outside the key's organizations is `404 CONVERSATION_NOT_FOUND`, never `403`.
 - `503 SEND_ENQUEUE_FAILED` means nothing was sent and nothing was charged: retry the same call. On any other `5xx`, read `GET /conversations/{conversation_id}/messages` and look for your text before retrying.
@@ -186,7 +305,7 @@ Email events:
 
 **Signature verification is mandatory.** Each delivery carries an HMAC-SHA256 signature in the `X-Webhook-Signature` header, formatted `sha256=...`. Compute the HMAC-SHA256 of the raw request body with your webhook secret, compare against the header using a constant-time comparison, and reject anything that does not match before touching the payload.
 
-**Delivery semantics:** respond with a 2xx quickly. Non-2xx responses trigger automatic retries, so design handlers to be idempotent on event delivery.
+**Delivery semantics:** respond with a 2xx quickly. Non-2xx responses trigger automatic retries, so design handlers to be idempotent on event delivery. An endpoint that fails every delivery for 3 days is turned off and the organization's owners and admins are emailed; a human re-enables it in the dashboard after fixing the URL, and events from while it was off are not resent.
 
 ## MCP server for documentation lookup
 

@@ -121,7 +121,7 @@ curl https://api.politicalcomms.com/v1/conversations/{conversation_id}/messages 
 
 Facts agents get wrong if they assume otherwise:
 
-- The body is `{ "text": "...", "media_ids": ["<media id>"] }` and nothing else (`text` up to 1,600 characters; at most one `media_ids` entry, an id from `GET /media`; at least one of non-blank `text` or a media id is required; unknown properties and raw `media_urls` are a `400`). Without media the reply is SMS billed per segment; with media it is one MMS billed flat. The `202` data adds `media_urls`. The number is a property of the conversation, never of the request. The API never starts a conversation; a project send does.
+- The body is `{ "text": "...", "media_ids": ["<media id>"] }` and nothing else (`text` up to 10 SMS parts, 1,530 GSM-7 or 670 Unicode characters, or 1,500 characters with media; at most one `media_ids` entry, an id from `GET /media`; at least one of non-blank `text` or a media id is required; unknown properties and raw `media_urls` are a `400`). Without media the reply is SMS billed per segment; with media it is one MMS billed flat. The `202` data adds `media_urls`. The number is a property of the conversation, never of the request. The API never starts a conversation; a project send does.
 - `202` means queued, not delivered. The outcome arrives on `message.sent`, `message.delivered`, or `message.failed` for the returned `message_id`; there is no separate reply event.
 - Every refusal happens before any charge: `409 CONTACT_OPTED_OUT` (the contact replied STOP; do not retry), `409 CONVERSATION_NOT_SENDABLE`, `409 PROJECT_DELETED`, `409 PHONE_NUMBER_UNAVAILABLE`, `400 MEDIA_NOT_USABLE` (media not in the conversation's organization, not ready, or from a different brand than the project's), `409 SENDING_PAUSED` (sending paused for the organization or platform-wide; `details.scope` names which), `402 INSUFFICIENT_BALANCE`. A thread outside the key's organizations is `404 CONVERSATION_NOT_FOUND`, never `403`.
 - `503 SEND_ENQUEUE_FAILED` means nothing was sent and nothing was charged: retry the same call. On any other `5xx`, read `GET /conversations/{conversation_id}/messages` and look for your text before retrying.
@@ -163,7 +163,7 @@ Email adds five more: `email.delivered`, `email.bounced` (permanent bounces only
 
 Every delivery carries an HMAC-SHA256 signature in the `X-Webhook-Signature` header, formatted `sha256=...`. Compute HMAC-SHA256 over the raw request body with the webhook secret, compare with a constant-time comparison, and reject mismatches before reading the payload.
 
-Respond 2xx quickly. Non-2xx triggers automatic retries, so make handlers idempotent on event delivery.
+Respond 2xx quickly. Non-2xx triggers automatic retries, so make handlers idempotent on event delivery. An endpoint that fails every delivery for 3 days is turned off and the organization's owners and admins are emailed; a human re-enables it in the dashboard after fixing the URL, and events from while it was off are not resent.
 
 ## References
 
