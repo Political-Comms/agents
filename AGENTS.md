@@ -21,9 +21,9 @@ These are non-negotiable. Follow them before writing any integration code.
 - **API reference docs:** <https://docs.politicalcomms.com/api-reference/introduction>
 - **SDKs:** official TypeScript client (`npm install @political-comms/sdk`), Python client (`pip install political-comms`), CLI (`npx @political-comms/cli`), and MCP server (`npx -y @political-comms/mcp`). Direct HTTP against the spec also works.
 
-The API surface spans Organizations, Brands, Campaigns, Tracking Domains, Phone Numbers, Contact Lists, Media Files, Projects, Conversations, Analytics, Billing, and Email. `GET /phone-numbers` includes numbers a parent organization shared with the key's organizations (`shared: true`, `nickname`; the owner's names are null on those rows). Brand, campaign and owned tracking-domain rows carry a `notes` field: the account's internal note (up to 100 characters) or null; it is never shown to recipients. New endpoints are added regularly; the spec is the source of truth.
+The API surface spans Organizations, Brands, Campaigns, Tracking Domains, Phone Numbers, Contact Lists, Media Files, Projects (including triggered projects), Conversations, Analytics, Billing, and Email. `GET /phone-numbers` includes numbers a parent organization shared with the key's organizations (`shared: true`, `nickname`; the owner's names are null on those rows). Brand, campaign and owned tracking-domain rows carry a `notes` field: the account's internal note (up to 100 characters) or null; it is never shown to recipients. New endpoints are added regularly; the spec is the source of truth.
 
-## Operation snapshot (OpenAPI 1.7.0, 2026-11-11)
+## Operation snapshot (OpenAPI 1.8.0, 2026-11-12)
 
 Every /v1 operation at the snapshot date; the spec is the live list.
 
@@ -35,8 +35,12 @@ Every /v1 operation at the snapshot date; the spec is the live list.
 - GET /v1/projects/{id}: Get Project
 - PATCH /v1/projects/{id}: Update Project
 - POST /v1/projects/{id}/copy: Copy Project
+- POST /v1/projects/{id}/end: End Project
+- POST /v1/projects/{id}/hook: Create Hook URL
 - POST /v1/projects/{id}/pause: Pause Project
+- POST /v1/projects/{id}/recipients: Add Recipient
 - POST /v1/projects/{id}/schedule: Schedule Project
+- POST /v1/projects/{id}/start: Start Project
 - GET /v1/projects/{id}/stats: Get Project Stats (single)
 - GET /v1/projects/{id}/survey-results: Get Survey Results
 - POST /v1/projects/{id}/test: Test Project
@@ -73,6 +77,9 @@ Every /v1 operation at the snapshot date; the spec is the live list.
 - GET /v1/email/campaigns: List Campaigns
 - POST /v1/email/campaigns: Create Campaign
 - GET /v1/email/campaigns/{id}: Get Campaign
+- POST /v1/email/campaigns/{id}/end: End Campaign
+- POST /v1/email/campaigns/{id}/hook: Create Hook URL
+- POST /v1/email/campaigns/{id}/recipients: Add Recipient
 - POST /v1/email/campaigns/{id}/schedule: Schedule Campaign
 - GET /v1/email/campaigns/{id}/stats: Get Campaign Stats
 - POST /v1/email/campaigns/{id}/unschedule: Unschedule Campaign
@@ -222,9 +229,29 @@ Facts agents get wrong if they assume otherwise:
 - `503 SEND_ENQUEUE_FAILED` means nothing was sent and nothing was charged: retry the same call. On any other `5xx`, read `GET /conversations/{conversation_id}/messages` and look for your text before retrying.
 - Missed a webhook? `GET /conversations?updated_since=<iso>` lists threads with inbound messages, newest inbound first (default 7 days back, maximum 90; keyset paginated, page until `next_cursor` is null). Poll it at most once a minute; the webhook is the real-time path. `GET /conversations/{id}/messages` reads a thread newest first without marking it read.
 
+## Triggered projects and campaigns
+
+A **triggered** text project or email campaign has no contact list. Each person is added when its `trigger` fires and gets one message, right away or after a delay. It stays active until paused or ended. The type is fixed at creation.
+
+`trigger` has the same shape for text and email (snake_case): `source` is `api`, `donation`, or `event`; `delay_minutes` is 0 to 43200; `reentry` is `{ "mode": "once" }` (default) or `{ "mode": "repeat", "min_gap_hours": 1..8760 }`.
+
+- `donation`: `donation.integrations` (1 to 20 of `{ provider: "winred" | "anedot", id }`), `donor` (`any`, `first_time`, `returning`), `gift` (`any`, `one_time`, `recurring`), `amount_min` / `amount_max` in dollars, `page_names`, `source_codes`.
+- `event`: `event.event` is `text_link_click`, `text_reply`, `email_open`, `email_click`, or `email_reply`; `event.sources` is `"any"` (never includes another triggered item) or `{ "ids": [...] }` (project ids for `text_*`, campaign ids for `email_*`); `link_url` optional on `email_click`. Email opens are approximate.
+- `api`: you or an inbound hook add recipients.
+
+Workflow:
+
+1. **Create with a trigger.** Text: `POST /v1/projects` with `"type": "triggered"`, the broadcast body without `contact_list_ids` or `suppression_list_ids`, and a required `trigger`. Email: `POST /v1/email/campaigns` with a `trigger` instead of `list_ids` (`list_ids` is required unless `trigger` is set; a trigger cannot be combined with `list_ids` or `sequence`, `400`).
+2. **Test it.** `POST /v1/projects/{id}/test` for text; the email test send for a campaign.
+3. **Start it.** Text: `POST /v1/projects/{id}/start` (no body; also resumes a paused project; `409 CONFLICT` for a project that is not triggered). Email: `POST /v1/email/campaigns/{id}/schedule` with no `scheduled_at`. Pause a text project with `POST /v1/projects/{id}/pause`.
+4. **Add recipients, or hand out the hook URL.** `POST /v1/projects/{id}/recipients` with `{ "phone_number": "+12025550141", "fields": { "first_name": "Ada" }, "occurrence_id": "evt_123" }`, or `POST /v1/email/campaigns/{id}/recipients` with `email`. Send an `occurrence_id` so a retry is a no-op. Answers: `202 { status: "queued", send_at }`, `200 { status: "already_entered", reason }` (`duplicate`, `already_entered`, `too_soon`), `409 CONTACT_OPTED_OUT`, `409 CONFLICT` (not triggered, or not active: a paused or never started item refuses recipients rather than queueing them), `422 VALIDATION_ERROR` with `details { field, reason }`, `404`. `POST /v1/projects/{id}/hook` and `POST /v1/email/campaigns/{id}/hook` return `201 { hook_url, endpoint_url, secret }` once; a new call retires the old ones at once. `hook_url` carries the secret in its path; when the caller can set headers, post to `endpoint_url` with the `secret` in `X-Hook-Secret` instead, which keeps the secret out of URLs. `POST {hook_url}` takes a JSON or form body (`phone_number` or `phone`, or `email`; optional `occurrence_id`; other top-level scalar keys become fields), needs no API key, answers like the recipients endpoints, and rate limits at 600 requests a minute per hook. It works with the generic webhook step in Zapier, Make, and n8n; there is no published Zapier app. Treat the URL as a secret.
+5. **End it.** `POST /v1/projects/{id}/end` or `POST /v1/email/campaigns/{id}/end` (no body). Ending is final and people still waiting are not sent; pausing is reversible.
+
+Rules to respect: a text that comes due between 10 PM and 8 AM in the recipient's time zone (by area code) is held until 8 AM, email has no hold; opted-out numbers and suppressed addresses are never sent to; fields passed with a recipient are merge tags (`{first_name}`), are stored on the recipient, and appear in reports, exports, and outbound webhook `contact.custom_fields`; donation triggers carry `first_name`, `last_name`, `email`, `address`, `address_2`, `city`, `state`, `zip`, `employer`, `occupation`, `amount`, `page_name`, and `source_code` as merge tags. `GET /v1/projects/stats` rows for triggered projects add `waiting_recipients` and `skipped_recipients`. For a follow-up series, chain triggered items (B triggers on a click or reply from A); there is no multi-step series.
+
 ## Email
 
-The `/v1/email` surface covers sending domains and sender identities (read-only), suppressions (unsubscribes, bounces, complaints), campaigns, and templates: 16 operations in all. Lists are one family for phones and emails under `/v1/contact-lists`: created, with their phones and/or emails, only by `POST /v1/contact-lists/import`, and deleted with `DELETE /v1/contact-lists/{id}` (which removes the list's emails too). Setup, curation, and paid workflows are dashboard features rather than API endpoints: registering domains and senders, renaming lists, result exports, campaign pause/resume/test, and Lincoln drafting.
+The `/v1/email` surface covers sending domains and sender identities (read-only), suppressions (unsubscribes, bounces, complaints), campaigns, and templates: 19 operations in all. Lists are one family for phones and emails under `/v1/contact-lists`: created, with their phones and/or emails, only by `POST /v1/contact-lists/import`, and deleted with `DELETE /v1/contact-lists/{id}` (which removes the list's emails too). Setup, curation, and paid workflows are dashboard features rather than API endpoints: registering domains and senders, renaming lists, result exports, campaign pause/resume/test, and Lincoln drafting. A triggered campaign is the exception: start it with the schedule call and no `scheduled_at`, and end it with `/end`.
 
 **Email is generally available.** Write endpoints under `/v1/email/*` require the `email` entitlement on the key's organization and return `403 ENTITLEMENT_REQUIRED` with `details.entitlement: "email"` without it. Reads are open to any key. That response is not a bad key or a permissions problem: do not retry it and do not tell the operator their credentials are wrong; the organization needs email enabled on its account, so escalate to a human.
 
@@ -234,7 +261,7 @@ Facts that differ from the messaging surface, and that agents get wrong if they 
 
 - **Email endpoints are keyset paginated.** They return `{ "data": [...], "has_more": bool, "next_cursor": string|null }` inside `data`, unlike the messaging endpoints, which return a plain array. Page until `next_cursor` is null. Cursors are opaque: never parse, construct, or reuse one across a different ordering.
 - **There is no inbox and no inbound email.** We do not receive email, and there is no inbound email webhook. Replies go to the `reply_to` address on the sender identity. Do not build a polling loop looking for one.
-- **There is no A/B testing** and no `email.opened` webhook event.
+- **There is no A/B testing.** The `email.opened` webhook event exists but is approximate (mail apps that hide opens are not counted) and opt-in: never treat it as a count of readers.
 - **DNS is manual.** `GET /v1/email/domains/{id}` returns the records to publish; the platform never writes DNS and never asks for registrar credentials. Domains are registered in the dashboard. Poll the domain until `status` is `active`.
 - **Sender identities carry a read-only `gmail_verified_sender` object.** `{ status, submitted_at, verified_at }`, where `status` is one of `not_eligible | eligible | ready_to_submit | submitted | verified | suspended | rejected | expired` and `verified_at` is set only when `status` is `verified`. It reflects the sender's standing in Google's Gmail Verified Sender Program, submitted through Campaign Verify; it is never a sending gate.
 - **Use suppressions to stop mailing an address.** `POST /v1/email/suppressions` is the public primitive; it survives a re-import, because the underlying contact rows carry the bounce and complaint history. There is no public contact-delete. Scope is `org`, `identity`, or `domain`, and all three apply automatically - there is nothing to attach to a campaign. To hold a set of people out of ONE campaign instead, put any list with emails in the campaign's `suppression_list_ids`: any list can be an audience or a hold-out, and the campaign decides which.
@@ -244,7 +271,7 @@ Facts that differ from the messaging surface, and that agents get wrong if they 
 - **Every campaign email is screened at send time; there is no validation step.** An address rated as likely undeliverable is not sent to: its message status is `suppressed`, it is not counted as a bounce, no `email.bounced` webhook fires, and it is held out of sends for 90 days, then re-checked. Campaigns have no recipient policy: they send to every subscribed, unsuppressed contact. Lists and contacts carry no `validated_at` or `validation_state`. Yahoo-run mailboxes (Yahoo, AOL, AT&T, Verizon, Cox, Frontier) never join a list: imports remove them and count them in the list's `email.removed_at_upload` under `yahoo_family`. Recipients at providers whose mailboxes report spam at an unusually high rate (currently windstream.net) are removed the same way, counted under `high_complaint_domain`.
 - **Read `lint` on every template write.** `POST /v1/email/templates` returns a `lint` object beside the template. A template with lint errors saves, but a campaign built on it will not schedule, so a caller that ignores `lint` discovers the problem at schedule time instead.
 
-Five email webhook events subscribe alongside the message events: `email.delivered`, `email.bounced` (permanent bounces only), `email.complained`, `email.unsubscribed`, and `email.clicked` (unique, non-bot clicks). Each payload carries a stable `id` that is also the deduplication key.
+Nine email webhook events subscribe alongside the message events (listed under Webhooks below). Each payload carries a stable `id` that is also the deduplication key.
 
 ## Rate limits and backoff
 
@@ -294,6 +321,10 @@ Email events:
 - `email.complained`
 - `email.unsubscribed`
 - `email.clicked` (unique, non-bot clicks)
+- `email.replied` (a reply came back through the platform: a sequence email, or a campaign a triggered campaign listens to)
+- `email.sent` (accepted for delivery)
+- `email.failed` (`reason` is `rejected` or `render_failed`)
+- `email.opened` (opt-in, not in the default set; the first open of a message; approximate, because mail apps that hide opens are not counted)
 
 **Signature verification is mandatory.** Each delivery carries an HMAC-SHA256 signature in the `X-Webhook-Signature` header, formatted `sha256=...`. Compute the HMAC-SHA256 of the raw request body with your webhook secret, compare against the header using a constant-time comparison, and reject anything that does not match before touching the payload.
 
