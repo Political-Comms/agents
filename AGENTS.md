@@ -101,14 +101,14 @@ Every /v1 operation at the snapshot date; the spec is the live list.
 
 - GET /v1/email/suppressions: List Suppressions
 - POST /v1/email/suppressions: Add Suppressions
-- DELETE /v1/email/suppressions: Remove Suppressions
+- DELETE /v1/email/suppressions: Remove Suppressions (needs `public:delete`)
 
 ### Contact Lists
 
 - GET /v1/contact-lists: List Contact Lists
 - POST /v1/contact-lists/import: Import List
 - GET /v1/contact-lists/{id}: Get Contact List
-- DELETE /v1/contact-lists/{id}: Delete Contact List
+- DELETE /v1/contact-lists/{id}: Delete Contact List (needs `public:delete`)
 - POST /v1/contact-lists/{id}/analyze: Analyze Contact List
 - GET /v1/contact-lists/{id}/download: Download Contact List CSV
 
@@ -117,7 +117,7 @@ Every /v1 operation at the snapshot date; the spec is the live list.
 - GET /v1/media: List Media Files
 - POST /v1/media: Import Media
 - GET /v1/media/{id}: Get Media File
-- DELETE /v1/media/{id}: Delete Media File
+- DELETE /v1/media/{id}: Delete Media File (needs `public:delete`)
 
 ### Sending Domains
 
@@ -157,6 +157,7 @@ X-API-Key: pc_live_1234567890abcdef
 
 Key facts:
 
+- Keys carry up to three permissions: `public:read` (GET), `public:write` (POST, PATCH, PUT), and `public:delete` (DELETE: `DELETE /contact-lists/{id}`, `DELETE /media/{id}`, `DELETE /email/suppressions`). New keys get read and write; delete is opt-in when the human creates the key and requires write. Permissions cannot be edited; ask the operator for a new key. A key missing the permission gets 403 "Insufficient permissions".
 - Keys are prefixed `pc_live_`.
 - Key provisioning is human-initiated. A person generates keys in the dashboard at <https://app.politicalcomms.com/> under Admin → API. An agent cannot self-provision a key; ask the operator to create one.
 - Keys are shown once at creation. Store them in a secret manager immediately.
@@ -188,7 +189,7 @@ curl https://api.politicalcomms.com/v1/projects \
 
 Notes on the body: `brand_id` and `campaign_id` are required on the default `10dlc` channel and omitted for `toll-free`; `contact_list_ids` is optional: omit it to create a draft and attach lists later via `PATCH /projects/{id}`. Validation is strict: unknown properties are rejected with a 400.
 
-Test phone numbers: To rehearse a specific outcome without texting a real phone, send the test to a test phone number: any US number ending 555-0100 through 555-0199 (any area code). It never reaches a carrier, and the last two digits fix the result: 00 delivered; 01 failed 003 (blocked as spam); 02 failed 004 (rejected by destination); 03 failed 021 (not a mobile phone); 04 failed 012 (invalid number); 05 failed 300 (recipient opted out); 06 failed 005 (expired); 07 to 99 delivered. Webhooks fire as normal with carrier `Test carrier`, and the message is billed at the normal rate. See https://docs.politicalcomms.com/api-reference/testing.
+Test phone numbers: To rehearse a specific outcome without texting a real phone, send the test to a test phone number: any US number ending 555-0100 through 555-0199 (any area code). It never reaches a carrier, and the last two digits fix the result: 00 delivered; 01 failed 003 (blocked as spam); 02 failed 004 (rejected by destination); 03 failed 021 (not a mobile phone); 04 failed 012 (invalid number); 05 failed 300 (recipient opted out); 06 failed 005 (expired); 10 delivered, then texts back a reply; 11 delivered, then texts back STOP (added to the sender's opt-out list); every other ending delivered. Webhooks fire as normal with carrier `Test carrier`, and the message is billed at the normal rate. See https://docs.politicalcomms.com/api-reference/testing.
 
 Editing: `PATCH /projects/{id}` works on broadcast projects in `draft`, `awaiting_test`, `ready`, or `paused` (other statuses return `409 INVALID_STATE_TRANSITION` with `details.allowed`); only `organization_id` and `type` are immutable (`400 FIELD_NOT_EDITABLE`). `channel` (`10dlc`, `toll-free`, `short-code`), `brand_id`, `campaign_id`, and `toll_free_verification_id` are editable, but sending any of them requires the full setup for the effective channel (10dlc: `brand_id` and `campaign_id`; toll-free: `toll_free_verification_id`; short-code: none of the three) plus `phone_number_ids`, with the same checks and error codes as create; `409 CAMPAIGN_SUSPENDED` for a suspended campaign, `409 CAMPAIGN_EXPIRED` for an expired one, and `400 ASSET_OUT_OF_SCOPE` when the project's lists or media belong to the old brand or registration (send new `contact_list_ids`, `suppression_list_ids`, and `media_ids` in the same request). Any edit moves the project to `awaiting_test`. To resume a paused project after an edit: `PATCH`, then `POST /projects/{id}/test`, then `POST /projects/{id}/schedule`; recipients already sent are never re-sent. `POST /projects/{id}/schedule` returns `409 TOLL_FREE_NOT_VERIFIED` (`details.phoneNumberIds`) when a toll-free number has not finished verification.
 
@@ -251,7 +252,7 @@ A **triggered** text project or email campaign has no contact list. Each person 
 Workflow:
 
 1. **Create with a trigger.** Text: `POST /v1/projects` with `"type": "triggered"`, the broadcast body without `contact_list_ids` or `suppression_list_ids`, and a required `trigger`. Email: `POST /v1/email/campaigns` with a `trigger` instead of `list_ids` (`list_ids` is required unless `trigger` is set; a trigger cannot be combined with `list_ids` or `sequence`, `400`).
-2. **Test it.** `POST /v1/projects/{id}/test` for text; the email test send for a campaign. To rehearse a specific outcome without texting a real phone, send the test to a test phone number: any US number ending 555-0100 through 555-0199 (any area code). It never reaches a carrier, and the last two digits fix the result: 00 delivered; 01 failed 003 (blocked as spam); 02 failed 004 (rejected by destination); 03 failed 021 (not a mobile phone); 04 failed 012 (invalid number); 05 failed 300 (recipient opted out); 06 failed 005 (expired); 07 to 99 delivered. Webhooks fire as normal with carrier `Test carrier`, and the message is billed at the normal rate. See https://docs.politicalcomms.com/api-reference/testing.
+2. **Test it.** `POST /v1/projects/{id}/test` for text; the email test send for a campaign. To rehearse a specific outcome without texting a real phone, send the test to a test phone number: any US number ending 555-0100 through 555-0199 (any area code). It never reaches a carrier, and the last two digits fix the result: 00 delivered; 01 failed 003 (blocked as spam); 02 failed 004 (rejected by destination); 03 failed 021 (not a mobile phone); 04 failed 012 (invalid number); 05 failed 300 (recipient opted out); 06 failed 005 (expired); 10 delivered, then texts back a reply; 11 delivered, then texts back STOP (added to the sender's opt-out list); every other ending delivered. Webhooks fire as normal with carrier `Test carrier`, and the message is billed at the normal rate. See https://docs.politicalcomms.com/api-reference/testing.
 3. **Start it.** Text: `POST /v1/projects/{id}/start` (no body; also resumes a paused project; `409 CONFLICT` for a project that is not triggered). Email: `POST /v1/email/campaigns/{id}/schedule` with no `scheduled_at`. Pause a text project with `POST /v1/projects/{id}/pause`.
 4. **Add recipients, or hand out the hook URL.** `POST /v1/projects/{id}/recipients` with `{ "phone_number": "+12025550141", "fields": { "first_name": "Ada" }, "occurrence_id": "evt_123" }`, or `POST /v1/email/campaigns/{id}/recipients` with `email`. Send an `occurrence_id` so a retry is a no-op. Answers: `202 { status: "queued", send_at }`, `200 { status: "already_entered", reason }` (`duplicate`, `already_entered`, `too_soon`), `409 CONTACT_OPTED_OUT`, `409 CONFLICT` (not triggered, or not active: a paused or never started item refuses recipients rather than queueing them), `422 VALIDATION_ERROR` with `details { field, reason }`, `404`. `POST /v1/projects/{id}/hook` and `POST /v1/email/campaigns/{id}/hook` return `201 { hook_url, endpoint_url, secret }` once; a new call retires the old ones at once. `hook_url` carries the secret in its path; when the caller can set headers, post to `endpoint_url` with the `secret` in `X-Hook-Secret` instead, which keeps the secret out of URLs. `POST {hook_url}` takes a JSON or form body (`phone_number` or `phone`, or `email`; optional `occurrence_id`; other top-level scalar keys become fields), needs no API key, answers like the recipients endpoints, and rate limits at 600 requests a minute per hook. It works with the generic webhook step in Zapier, Make, and n8n; there is no published Zapier app. Treat the URL as a secret.
 5. **End it.** `POST /v1/projects/{id}/end` or `POST /v1/email/campaigns/{id}/end` (no body). Ending is final and people still waiting are not sent; pausing is reversible.
