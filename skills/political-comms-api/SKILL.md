@@ -37,7 +37,7 @@ X-API-Key: pc_live_1234567890abcdef
 
 ## Quickstart: create, then schedule
 
-A project is the unit of work: message body, optional media, link tracking, and the target contact list. Sending is two calls.
+A project is the unit of work: message body, optional media, up to three tracked links per message, and the target contact list. Sending is two calls.
 
 Create the project:
 
@@ -56,6 +56,8 @@ curl https://api.politicalcomms.com/v1/projects \
     "message_text": "Polls close at 7pm. Reply STOP to opt out."
   }'
 ```
+
+Tracked links: `link_tracking_enabled` + `link_tracking_domain_id` + `link_tracking_links` (1 to 3 of `{ destination_url, param_fields (up to 10: "phone" or a contact field), fallback_url }`). Entry order is tag order: `{tracking_url}`, `{tracking_url_2}`, `{tracking_url_3}`; a tag with no link is a 400. A `{field}` placeholder in `destination_url` must be one of that link's `param_fields`; other fields are appended as `&field=value`. `link_tracking_destination_url`, `link_tracking_param_field`, `link_tracking_fallback_url` are aliases for link 1 and a 400 beside `link_tracking_links`.
 
 `brand_id` and `campaign_id` are required on the default `10dlc` channel and omitted for `toll-free` and `short-code`. `contact_list_ids` is optional: omit it to create a draft and attach lists or tags later via `PATCH /projects/{id}`; a project is complete with at least one list or one `tag_ids` entry (see Tags below). Validation is strict: unknown body properties are rejected with a 400.
 

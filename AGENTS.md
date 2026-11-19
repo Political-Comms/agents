@@ -178,7 +178,9 @@ The full agent-oriented auth walkthrough lives at <https://politicalcomms.com/au
 
 ## Core workflow: create, then schedule
 
-A "project" is the unit of work: a composed message body, optional media, link tracking, and the contact list it targets. Sending is two calls, with an optional test in between: `POST /projects/{id}/test` accepts `test_contacts`, and each entry may carry an optional `merge_values` object (tag name to value) so it renders without sampling a list contact.
+A "project" is the unit of work: a composed message body, optional media, up to three tracked links per message (`link_tracking_links`, below), and the contact list it targets. Sending is two calls, with an optional test in between: `POST /projects/{id}/test` accepts `test_contacts`, and each entry may carry an optional `merge_values` object (tag name to value) so it renders without sampling a list contact.
+
+Tracked links: `link_tracking_enabled` with `link_tracking_domain_id` and `link_tracking_links`, 1 to 3 entries on create of `{ destination_url, param_fields (0 to 10 unique names: "phone" or a contact field), fallback_url }`. Entry order is tag order: `{tracking_url}`, `{tracking_url_2}`, `{tracking_url_3}`; each tag becomes that recipient's own short link (a repeated tag repeats it), and a tag with no link behind it is a 400. A `{field}` placeholder in a `destination_url` must be one of that link's `param_fields`; other fields are appended as `&field=value` after `short_id`; a destination of exactly `https://{field}` needs `fallback_url`. `link_tracking_destination_url`, `link_tracking_param_field` and `link_tracking_fallback_url` are aliases for the first link and a 400 when sent with `link_tracking_links`.
 
 **1. Create the project** with `POST /projects`:
 
